@@ -1,0 +1,33 @@
+---
+- name: Install tools
+  pkgng:
+    name: "{{ item }}"
+    state: present
+    cached: no
+  with_items:
+  - screen
+  - coreutils
+  - openssl
+  - bash
+  - wget
+
+- name: Enable the gateway features
+  lineinfile:
+    dest: /etc/rc.conf
+    regexp: '^{{ item.param }}.*'
+    line: '{{ item.param }}={{ item.value }}'
+  with_items:
+    - { param: firewall_enable, value: '"YES"' }
+    - { param: firewall_type, value: '"open"' }
+    - { param: gateway_enable, value: '"YES"' }
+#    - { param: natd_enable, value: '"YES"' }
+#    - { param: natd_interface, value: '"{{ ansible_default_ipv4.device|default() }}"' }
+#    - { param: natd_flags, value: '"-dynamic -m"' }
+
+- name: Load ipfw
+  shell: "kldstat -n ipfw.ko || kldload ipfw"
+
+- name: restart ipfw
+  service:
+    name: ipfw
+    state: restarted

@@ -1,0 +1,6 @@
+hosts
+*.retry
+venv/
+auto-*
+configs/*
+.vagrant

@@ -1,0 +1,175 @@
+---
+
+- block:  # Generate certificate keys
+  - name: Generate password for the CA key 
+    shell: "openssl rand -hex 16 > configs/{{ IP_subject_alt_name }}/ca_password"
+    args:
+      creates: "configs/{{ IP_subject_alt_name }}/ca_password"
+    register: CA_password
+
+  - name: Ensure the pki directories exist
+    file:
+      dest: "configs/{{ IP_subject_alt_name }}/pki/{{ item }}"
+      state: directory
+      recurse: yes 
+    with_items:
+      - ecparams
+      - certs
+      - crl
+      - newcerts
+      - private
+      - reqs
+
+  - name: Ensure the files exist
+    file:
+      dest: "configs/{{ IP_subject_alt_name }}/pki/{{ item }}"
+      state: touch
+    with_items:
+      - ".rnd"
+      - "private/.rnd"
+      - "index.txt"
+      - "index.txt.attr"
+      - "serial"
+
+  - name: Generate the openssl server configs
+    template:
+      src: openssl.cnf.j2
+      dest: "configs/{{ IP_subject_alt_name }}/pki/openssl.cnf"
+
+  - name: Build the CA pair
+    shell: >
+      openssl ecparam -name prime256v1 -out ecparams/prime256v1.pem &&
+      openssl req -utf8 -new
+      -newkey {{ algo_params | default('ec:ecparams/prime256v1.pem') }}
+      -config openssl.cnf
+      -keyout private/cakey.pem
+      -out cacert.pem -x509 -days 3650
+      -batch
+      -passout pass:"{{ CA_password.stdout }}" &&
+      touch {{ IP_subject_alt_name }}_ca_generated
+    args:
+      chdir: "configs/{{ IP_subject_alt_name }}/pki/"
+      creates: "{{ IP_subject_alt_name }}_ca_generated"
+    environment:
+      subjectAltName: "DNS:{{ IP_subject_alt_name }},IP:{{ IP_subject_alt_name }}"
+
+  - name: Copy the CA certificate
+    copy:
+      src: "configs/{{ IP_subject_alt_name }}/pki/cacert.pem"
+      dest: "configs/{{ IP_subject_alt_name }}/cacert.pem"
+      mode: "0600"
+
+  - name: Generate the serial number
+    shell: echo 01 > serial && touch serial_generated
+    args:
+      chdir: "configs/{{ IP_subject_alt_name }}/pki/"
+      creates: serial_generated
+
+  - name: Build the server pair
+    shell: >
+      openssl req -utf8 -new
+      -newkey {{ algo_params | default('ec:ecparams/prime256v1.pem') }}
+      -config openssl.cnf
+      -keyout private/{{ IP_subject_alt_name }}.key
+      -out reqs/{{ IP_subject_alt_name }}.req -nodes
+      -passin pass:"{{ CA_password.stdout }}"
+      -subj "/CN={{ IP_subject_alt_name }}" -batch &&
+      openssl ca -utf8
+      -in reqs/{{ IP_subject_alt_name }}.req
+      -out certs/{{ IP_subject_alt_name }}.crt
+      -config openssl.cnf -days 3650 -batch
+      -passin pass:"{{ CA_password.stdout }}"
+      -subj "/CN={{ IP_subject_alt_name }}" &&
+      touch certs/{{ IP_subject_alt_name }}_crt_generated
+    args:
+      chdir: "configs/{{ IP_subject_alt_name }}/pki/"
+      creates: certs/{{ IP_subject_alt_name }}_crt_generated
+    environment:
+      subjectAltName: "DNS:{{ IP_subject_alt_name }},IP:{{ IP_subject_alt_name }}"
+
+  delegate_to: localhost
+  become: no
+
+# here and below install and configure strongswan
+- name: Ensure that the strongswan group exists
+  group:
+    name: strongswan
+    state: present
+
+- name: Ensure that the strongswan user exists
+  user: 
+    name: strongswan
+    group: strongswan
+    state: present
+
+- name: Copy the keys to the strongswan directory
+  copy:
+    src: "configs/{{ IP_subject_alt_name }}/{{ item.src }}"
+    dest: "{{ ss_ipsec_path }}/{{ item.dest }}"
+    owner: "strongswan"
+    group: "wheel"
+    mode: "0600"
+  with_items:
+    - src: "pki/cacert.pem"
+      dest: "cacerts/ca.crt"
+    - src: "pki/certs/{{ IP_subject_alt_name }}.crt"
+      dest: "certs/{{ IP_subject_alt_name }}.crt"
+    - src: "pki/private/{{ IP_subject_alt_name }}.key"
+      dest: "private/{{ IP_subject_alt_name }}.key"
+
+- name: Install StrongSwan
+  pkgng:
+    name: strongswan
+    state: present
+    cached: no
+
+- name: Disable strongswan service
+  service:
+    name: strongswan
+    enabled: no
+    state: stopped
+
+- name: Create config files
+  template:
+    src: "{{ item.name }}.j2"
+    dest: "{{ config_prefix }}/etc/{{ item.name }}"
+    owner: "{{ item.owner }}"
+    group: wheel
+    mode: "0600"
+  with_items:
+  - name: strongswan.d/charon.conf
+    owner: root
+  - name: strongswan.d/charon-logging.conf
+    owner: root
+  - name: ipsec.conf
+    owner: root
+  - name: ipsec.secrets
+    owner: strongswan
+
+- name: Get list of plugins
+  shell: 'find {{ ss_charon_plugins_path }} -type f -name *.conf -exec basename {} \; | cut -f1 -d.'
+  register: ss_plugins
+
+- name: Enable required plugins
+  lineinfile:
+    dest: "{{ ss_charon_plugins_path }}/{{ item }}.conf"
+    regexp: '.*load.*'
+    line: 'load = yes'
+    state: present
+  when: item in ss_enabled_plugins
+  with_items: "{{ ss_plugins.stdout_lines }}"
+
+- name: Disable unneeded plugins
+  lineinfile:
+    dest: "{{ ss_charon_plugins_path }}/{{ item }}.conf"
+    regexp: '.*load.*'
+    line: 'load = no'
+    state: present
+  when: item not in ss_enabled_plugins
+  with_items: "{{ ss_plugins.stdout_lines }}"
+
+- name: Enable strongswan service
+  service:
+    name: strongswan
+    enabled: yes
+    state: started

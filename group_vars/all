@@ -1,0 +1,38 @@
+ansible_python_interpreter: "/usr/local/bin/python2.7"
+
+config_prefix: "/usr/local/"
+ss_service_path: "{{ config_prefix }}/etc/strongswan.d"
+ss_ipsec_path: "{{ config_prefix }}/etc/ipsec.d"
+ss_charon_plugins_path: "{{ ss_service_path }}/charon"
+
+IP_subject_alt_name: "{{ ansible_host }}"
+
+ss_enabled_plugins:
+  - aes
+  - gcm
+  - hmac
+  - kernel-netlink
+  - nonce
+  - openssl
+  - pem
+  - pgp
+  - pkcs12
+  - pkcs7
+  - pkcs8
+  - pubkey
+  - random
+  - revocation
+  - sha2
+  - socket-default
+  - stroke
+  - x509
+  - kernel-pfroute
+  - kernel-pfkey
+
+ciphers:
+  defaults:
+    ike: aes128gcm16-prfsha512-ecp256!
+    esp: aes128gcm16-ecp256!
+  compat:
+    ike: aes128gcm16-prfsha512-ecp256,aes128-sha2_512-prfsha512-ecp256,aes128-sha2_384-prfsha384-ecp256!
+    esp: aes128gcm16-ecp256,aes128-sha2_512-prfsha512-ecp256!

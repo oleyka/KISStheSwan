@@ -1,0 +1,16 @@
+---
+- hosts: all
+  gather_facts: no
+  become: yes
+
+  pre_tasks:
+  - name: Install python
+    raw: "env ASSUME_ALWAYS_YES=YES pkg install -y python27"
+
+  - name: gather facts
+    setup:
+      filter: "*"
+
+  roles:
+  - common
+  - strongswan
