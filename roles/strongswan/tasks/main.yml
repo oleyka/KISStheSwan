@@ -1,17 +1,11 @@
 ---
 
 - block:  # Generate certificate keys
-  - name: Generate password for the CA key 
-    shell: "openssl rand -hex 16 > configs/{{ IP_subject_alt_name }}/ca_password"
-    args:
-      creates: "configs/{{ IP_subject_alt_name }}/ca_password"
-    register: CA_password
-
   - name: Ensure the pki directories exist
     file:
       dest: "configs/{{ IP_subject_alt_name }}/pki/{{ item }}"
       state: directory
-      recurse: yes 
+      recurse: yes
     with_items:
       - ecparams
       - certs
@@ -36,6 +30,14 @@
       src: openssl.cnf.j2
       dest: "configs/{{ IP_subject_alt_name }}/pki/openssl.cnf"
 
+  - name: Generate password for the CA key
+    shell: "openssl rand -hex 16 > configs/{{ IP_subject_alt_name }}/ca_password"
+    args:
+      creates: "configs/{{ IP_subject_alt_name }}/ca_password"
+
+  - set_fact:
+      CA_password: "{{ lookup('file', 'configs/' ~ IP_subject_alt_name ~ '/ca_password') }}"
+
   - name: Build the CA pair
     shell: >
       openssl ecparam -name prime256v1 -out ecparams/prime256v1.pem &&
@@ -45,7 +47,7 @@
       -keyout private/cakey.pem
       -out cacert.pem -x509 -days 3650
       -batch
-      -passout pass:"{{ CA_password.stdout }}" &&
+      -passout pass:"{{ CA_password }}" &&
       touch {{ IP_subject_alt_name }}_ca_generated
     args:
       chdir: "configs/{{ IP_subject_alt_name }}/pki/"
@@ -72,13 +74,13 @@
       -config openssl.cnf
       -keyout private/{{ IP_subject_alt_name }}.key
       -out reqs/{{ IP_subject_alt_name }}.req -nodes
-      -passin pass:"{{ CA_password.stdout }}"
+      -passin pass:"{{ CA_password }}"
       -subj "/CN={{ IP_subject_alt_name }}" -batch &&
       openssl ca -utf8
       -in reqs/{{ IP_subject_alt_name }}.req
       -out certs/{{ IP_subject_alt_name }}.crt
       -config openssl.cnf -days 3650 -batch
-      -passin pass:"{{ CA_password.stdout }}"
+      -passin pass:"{{ CA_password }}"
       -subj "/CN={{ IP_subject_alt_name }}" &&
       touch certs/{{ IP_subject_alt_name }}_crt_generated
     args:
@@ -97,7 +99,7 @@
     state: present
 
 - name: Ensure that the strongswan user exists
-  user: 
+  user:
     name: strongswan
     group: strongswan
     state: present
