@@ -1,0 +1,56 @@
+#!/usr/bin/env bash -eu
+
+function usage() {  # TODO allow configuring via the private address
+    echo "Usage: $0 -h <host_public_ip> -u <username> -i <ssh_key> [-p <port>]"
+    exit 1
+}
+
+if [[ $# -eq 0 ]]; then
+    usage
+fi
+
+port=22
+while [[ $# -gt 1 ]]; do
+    key=$1
+
+    case $key in
+        -h|--hostname)
+        host="$2"
+        shift
+        ;;
+        -u|--username)
+        user="$2"
+        shift
+        ;;
+        -i|--identity)
+        private_key_file="$2"
+        shift
+        ;;
+        -p|--port)
+        port="$2"
+        shift
+        ;;
+        *)
+        usage
+        ;;
+    esac
+    shift
+done
+
+if [ ! -f ${private_key_file} ]; then
+    echo "SSH key ${private_key_file} not found, exiting..."
+    exit 2
+fi
+
+echo "Deploying StrongSwan on host $host port $port as user $user using key ${private_key_file}"
+read -p "Proceed? [y/N]: " -r proceed
+proceed=${proceed:-n}
+if [[ "$proceed" =~ ^(y|Y)$ ]]; then
+    ansible-playbook deploy.yml -vv -i ${host}, --extra-vars "\
+        ansible_port=$port \
+        ansible_ssh_private_key_file=${private_key_file} \
+        ansible_user=$user \
+        IP_subject_alt_name=$host"
+else
+    echo "Nothing to do, exiting..."
+fi

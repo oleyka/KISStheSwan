@@ -1,11 +1,9 @@
 ansible_python_interpreter: "/usr/local/bin/python2.7"
 
-config_prefix: "/usr/local/"
+config_prefix: "/usr/local"
 ss_service_path: "{{ config_prefix }}/etc/strongswan.d"
 ss_ipsec_path: "{{ config_prefix }}/etc/ipsec.d"
 ss_charon_plugins_path: "{{ ss_service_path }}/charon"
-
-IP_subject_alt_name: "{{ ansible_host }}"
 
 ss_enabled_plugins:
   - aes
