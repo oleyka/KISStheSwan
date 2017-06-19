@@ -23,7 +23,7 @@ ss_enabled_plugins:
   - sha2
   - socket-default
   - stroke
-  - x509
+  - x509  # affected by CVE-2017-9023 up until 5.5.3
   - kernel-pfroute
   - kernel-pfkey
 
