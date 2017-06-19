@@ -37,6 +37,7 @@ while [[ $# -gt 1 ]]; do
     shift
 done
 
+# TODO verify that all required parameters are set
 if [ ! -f ${private_key_file} ]; then
     echo "SSH key ${private_key_file} not found, exiting..."
     exit 2
