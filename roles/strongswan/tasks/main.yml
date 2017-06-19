@@ -107,7 +107,7 @@
 - name: Copy the keys to the strongswan directory
   copy:
     src: "configs/{{ IP_subject_alt_name }}/{{ item.src }}"
-    dest: "{{ ss_ipsec_path }}/{{ item.dest }}"
+    dest: "{{ ipsec_path }}/{{ item.dest }}"
     owner: "strongswan"
     group: "wheel"
     mode: "0600"
@@ -148,11 +148,11 @@
   - name: ipsec.secrets
     owner: strongswan
 
-- name: Get list of plugins
+- name: Get list of charon plugins
   shell: 'find {{ ss_charon_plugins_path }} -type f -name *.conf -exec basename {} \; | cut -f1 -d.'
   register: ss_plugins
 
-- name: Enable required plugins
+- name: Enable required charon plugins
   lineinfile:
     dest: "{{ ss_charon_plugins_path }}/{{ item }}.conf"
     regexp: '.*load.*'
@@ -161,7 +161,7 @@
   when: item in ss_enabled_plugins
   with_items: "{{ ss_plugins.stdout_lines }}"
 
-- name: Disable unneeded plugins
+- name: Disable unneeded charon plugins
   lineinfile:
     dest: "{{ ss_charon_plugins_path }}/{{ item }}.conf"
     regexp: '.*load.*'
