@@ -3,7 +3,7 @@
 - block:  # Generate certificate keys
   - name: Ensure the pki directories exist
     file:
-      dest: "configs/{{ IP_subject_alt_name }}/pki/{{ item }}"
+      dest: "{{ configs_local_prefix }}/pki/{{ item }}"
       state: directory
       recurse: yes
     with_items:
@@ -16,7 +16,7 @@
 
   - name: Ensure the files exist
     file:
-      dest: "configs/{{ IP_subject_alt_name }}/pki/{{ item }}"
+      dest: "{{ configs_local_prefix }}/pki/{{ item }}"
       state: touch
     with_items:
       - ".rnd"
@@ -28,21 +28,21 @@
   - name: Generate the openssl server configs
     template:
       src: openssl.cnf.j2
-      dest: "configs/{{ IP_subject_alt_name }}/pki/openssl.cnf"
+      dest: "{{ configs_local_prefix }}/pki/openssl.cnf"
 
   - name: Generate password for the CA key
-    shell: "openssl rand -hex 16 > configs/{{ IP_subject_alt_name }}/ca_password"
+    shell: "openssl rand -hex 16 > {{ configs_local_prefix }}/ca_password"
     args:
-      creates: "configs/{{ IP_subject_alt_name }}/ca_password"
+      creates: "{{ configs_local_prefix }}/ca_password"
 
   - set_fact:
-      CA_password: "{{ lookup('file', 'configs/' ~ IP_subject_alt_name ~ '/ca_password') }}"
+      CA_password: "{{ lookup('file', configs_local_prefix ~ '/ca_password') }}"
 
   - name: Build the CA pair
     shell: >
       openssl ecparam -name prime256v1 -out ecparams/prime256v1.pem &&
       openssl req -utf8 -new
-      -newkey {{ algo_params | default('ec:ecparams/prime256v1.pem') }}
+      -newkey 'ec:ecparams/prime256v1.pem'
       -config openssl.cnf
       -keyout private/cakey.pem
       -out cacert.pem -x509 -days 3650
@@ -50,27 +50,27 @@
       -passout pass:"{{ CA_password }}" &&
       touch {{ IP_subject_alt_name }}_ca_generated
     args:
-      chdir: "configs/{{ IP_subject_alt_name }}/pki/"
+      chdir: "{{ configs_local_prefix }}/pki/"
       creates: "{{ IP_subject_alt_name }}_ca_generated"
     environment:
       subjectAltName: "DNS:{{ IP_subject_alt_name }},IP:{{ IP_subject_alt_name }}"
 
   - name: Copy the CA certificate
     copy:
-      src: "configs/{{ IP_subject_alt_name }}/pki/cacert.pem"
-      dest: "configs/{{ IP_subject_alt_name }}/cacert.pem"
+      src: "{{ configs_local_prefix }}/pki/cacert.pem"
+      dest: "{{ configs_local_prefix }}/cacert.pem"
       mode: "0600"
 
   - name: Generate the serial number
     shell: echo 01 > serial && touch serial_generated
     args:
-      chdir: "configs/{{ IP_subject_alt_name }}/pki/"
+      chdir: "{{ configs_local_prefix }}/pki/"
       creates: serial_generated
 
   - name: Build the server pair
     shell: >
       openssl req -utf8 -new
-      -newkey {{ algo_params | default('ec:ecparams/prime256v1.pem') }}
+      -newkey 'ec:ecparams/prime256v1.pem'
       -config openssl.cnf
       -keyout private/{{ IP_subject_alt_name }}.key
       -out reqs/{{ IP_subject_alt_name }}.req -nodes
@@ -84,7 +84,7 @@
       -subj "/CN={{ IP_subject_alt_name }}" &&
       touch certs/{{ IP_subject_alt_name }}_crt_generated
     args:
-      chdir: "configs/{{ IP_subject_alt_name }}/pki/"
+      chdir: "{{ configs_local_prefix }}/pki/"
       creates: certs/{{ IP_subject_alt_name }}_crt_generated
     environment:
       subjectAltName: "DNS:{{ IP_subject_alt_name }},IP:{{ IP_subject_alt_name }}"
@@ -106,7 +106,7 @@
 
 - name: Copy the keys to the strongswan directory
   copy:
-    src: "configs/{{ IP_subject_alt_name }}/{{ item.src }}"
+    src: "{{ configs_local_prefix }}/{{ item.src }}"
     dest: "{{ ipsec_path }}/{{ item.dest }}"
     owner: "strongswan"
     group: "wheel"

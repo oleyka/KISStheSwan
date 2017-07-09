@@ -1,0 +1,96 @@
+---
+
+- block:
+  - name: generate password
+    set_fact:
+      easyrsa_p12_user_password: "{{ (ansible_date_time.iso8601_basic|sha1|to_uuid).split('-')[0] }}"
+      easyrsa_CA_password: "{{ lookup('file', configs_local_prefix ~ '/ca_password') }}"
+
+  - name: same user key password
+    shell: >
+      echo "{{ easyrsa_CA_password }}" > "{{ configs_local_prefix }}/pki/{{ user }}_password"
+
+  - name: Build the client's pair
+    shell: >
+      openssl req -utf8 -new
+      -newkey 'ec:ecparams/prime256v1.pem'
+      -config openssl.cnf
+      -keyout private/{{ user }}.key
+      -out reqs/{{ user }}.req -nodes
+      -passin pass:"{{ easyrsa_CA_password }}"
+      -subj "/CN={{ user }}" -batch &&
+      openssl ca -utf8
+      -in reqs/{{ user }}.req
+      -out certs/{{ user }}.crt
+      -config openssl.cnf -days 3650 -batch
+      -passin pass:"{{ easyrsa_CA_password }}"
+      -subj "/CN={{ user }}" &&
+      touch certs/{{ user }}_crt_generated
+    args:
+      chdir: "{{ configs_local_prefix }}/pki/"
+      creates: certs/{{ user }}_crt_generated
+    environment:
+      subjectAltName: "DNS:{{ user }}"
+
+  - name: Build the client's p12
+    shell: >
+      openssl pkcs12
+      -in certs/{{ user }}.crt
+      -inkey private/{{ user }}.key
+      -export
+      -name {{ user }}
+      -out private/{{ user }}.p12
+      -certfile cacert.pem
+      -passout pass:"{{ easyrsa_p12_user_password }}"
+    args:
+      chdir: "{{ configs_local_prefix }}/pki/"
+#    register: p12  #  TODO why?
+
+  - name: Copy the p12 certificates
+    copy:
+      src: "{{ configs_local_prefix }}/pki/private/{{ user }}.p12"
+      dest: "{{ configs_local_prefix }}/{{ user }}.p12"
+      mode: "0600"
+
+  - name: Register p12 PayloadContent
+    shell: "cat {{ configs_local_prefix }}/pki/private/{{ user }}.p12 | base64"
+    register:  PayloadContent
+
+  - name: debug
+    debug:
+      msg: "{{ PayloadContent.stdout }}"
+
+  - name: Set facts for mobileconfig
+    set_fact:
+      proxy_enabled: false
+      PayloadContentCA: "{{ lookup('file' , configs_local_prefix ~ '/pki/cacert.pem')|b64encode }}"
+
+  - name: Build the mobileconfig
+    template:
+      src: mobileconfig.j2
+      dest: "{{ configs_local_prefix }}/{{ user }}.mobileconfig"
+      mode: "0600"
+    # no_log: True
+
+  - name: Build the client ipsec config file
+    template:
+      src: client_ipsec.conf.j2
+      dest: "{{ configs_local_prefix }}/ipsec_{{ user }}.conf"
+      mode: 0600
+
+  - name: Build the client ipsec secret file
+    template:
+      src: client_ipsec.secrets.j2
+      dest: "{{ configs_local_prefix }}/ipsec_{{ user }}.secrets"
+      mode: 0600
+
+  - name: Restrict permissions for the local private directories
+    file:
+      path: "{{ configs_local_prefix }}"
+      recurse: True
+      state: directory
+      mode: 0700
+
+  delegate_to: localhost
+  become: no
+

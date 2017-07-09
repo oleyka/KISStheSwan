@@ -1,9 +1,15 @@
+configs_local_prefix: "{{ playbook_dir }}/configs/{{ IP_subject_alt_name }}"
+
 ansible_python_interpreter: "/usr/local/bin/python2.7"
 
 config_prefix: "/usr/local"
 ss_service_path: "{{ config_prefix }}/etc/strongswan.d"
 ss_charon_plugins_path: "{{ ss_service_path }}/charon"
 ipsec_path: "{{ config_prefix }}/etc/ipsec.d"
+
+# TODO review
+OnDemandEnabled_WIFI: False
+OnDemandEnabled_Cellular: False
 
 ss_enabled_plugins:
   - aes
@@ -26,6 +32,10 @@ ss_enabled_plugins:
   - x509  # affected by CVE-2017-9023 up until 5.5.3
   - kernel-pfroute
   - kernel-pfkey
+
+pkcs12_PayloadCertificateUUID: "{{ 900000 | random | to_uuid | upper }}"
+VPN_PayloadIdentifier: "{{ 800000 | random | to_uuid | upper }}"
+CA_PayloadIdentifier: "{{ 700000 | random | to_uuid | upper }}"
 
 ciphers:
   defaults:

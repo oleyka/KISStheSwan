@@ -1,0 +1,4 @@
+---
+
+- name: perform action
+  include: "{{ action }}.yml"

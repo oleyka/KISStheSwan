@@ -1,15 +1,17 @@
-#!/usr/bin/env bash -eu
+!/usr/bin/env bash -eu
 
 function usage() {  # TODO allow configuring via the private address
-    echo "Usage: $0 -h <host_public_ip> -u <adminuser> -i <ssh_key> [-p <port>]"
+    echo -e "Usage: $0 [-a <username>|-r <username>|-d <username>] \n              -h <host_public_ip> -u <adminuser> -i <ssh_key> [-p <port>]"
     exit 1
 }
 
-if [[ $# -eq 0 ]]; then
+if [[ $# -lt 2 ]]; then
     usage
 fi
 
 port=22
+action="list"
+
 while [[ $# -gt 1 ]]; do
     key=$1
 
@@ -30,6 +32,21 @@ while [[ $# -gt 1 ]]; do
         port="$2"
         shift
         ;;
+        -a|--add)
+        action="add"
+        user="$2"
+        shift
+        ;;
+        -d|--delete)
+        action="delete"
+        user="$2"
+        shift
+        ;;
+        -r|--replace)
+        action="replace"
+        user="$2"
+        shift
+        ;;
         *)
         usage
         ;;
@@ -37,21 +54,26 @@ while [[ $# -gt 1 ]]; do
     shift
 done
 
-# TODO verify that all required parameters are set
-if [ ! -f ${private_key_file} ]; then
+if [ -z $action ]; then
+    usage
+fi
+
+if [ ! -f "${private_key_file}" ]; then
     echo "SSH key ${private_key_file} not found, exiting..."
     exit 2
 fi
 
-echo "Deploying StrongSwan on host $host port $port as admin $admin using key ${private_key_file}"
+echo "Executing action: $action StrongSwan user $user on host $host port $port as admin $admin using key ${private_key_file}"
 read -p "Proceed? [y/N]: " -r proceed
 proceed=${proceed:-n}
 if [[ "$proceed" =~ ^(y|Y)$ ]]; then
-    ansible-playbook deploy.yml -vv -i ${host}, --extra-vars "\
+    ansible-playbook users.yml -vv -i ${host}, --extra-vars "\
         ansible_port=$port \
         ansible_ssh_private_key_file=${private_key_file} \
         ansible_user=$admin \
-        IP_subject_alt_name=$host"
+        IP_subject_alt_name=$host \
+        action=$action \
+        user=$user"
 else
     echo "Nothing to do, exiting..."
 fi

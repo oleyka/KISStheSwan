@@ -1,0 +1,22 @@
+---
+- hosts: all
+  gather_facts: no
+  become: yes
+
+  pre_tasks:
+  - name: gather facts
+    setup:
+      filter: "*"
+
+  - name: debug
+    debug:
+      var: inventory_hostname
+      verbosity: 2
+
+  - name: debug
+    debug:
+      var: hostvars[inventory_hostname]
+      verbosity: 2
+
+  roles:
+  - users
